@@ -25,13 +25,18 @@ export default {
     const url = new URL(request.url);
     let pathname = decodeURIComponent(url.pathname);
 
-    // Default root path serves manifest.json
+    // Normalize path: support root '/', '/manifest.json', or '/lastpatch/manifest.json'
     if (pathname === '/' || pathname === '') {
       pathname = '/manifest.json';
     }
 
     // Strip leading slash
-    const relativePath = pathname.replace(/^\/+/, '');
+    let relativePath = pathname.replace(/^\/+/, '');
+
+    // If client requested with /lastpatch/ prefix, strip it so it maps directly
+    if (relativePath.startsWith('lastpatch/')) {
+      relativePath = relativePath.replace(/^lastpatch\//, '');
+    }
 
     // Prevent path traversal attacks
     if (relativePath.includes('..') || relativePath.startsWith('.')) {
@@ -43,6 +48,38 @@ export default {
     const repo = env.GITHUB_REPO || 'flutter_remote_dev';
     const branch = env.GITHUB_BRANCH || 'main';
     const githubToken = env.GITHUB_TOKEN; // Optional: Required for private repos
+
+    // Diagnostic endpoint: /status or /health
+    if (relativePath === 'status' || relativePath === 'health') {
+      return new Response(
+        JSON.stringify(
+          {
+            service: 'Flutter Patcher OTA Streamer',
+            status: 'operational',
+            upstream: {
+              owner,
+              repo,
+              branch,
+              path: 'lastpatch/',
+            },
+            endpoints: {
+              manifest: `${url.origin}/manifest.json`,
+              patch_zip: `${url.origin}/patch.zip`,
+            },
+            timestamp: new Date().toISOString(),
+          },
+          null,
+          2
+        ),
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            ...getCorsHeaders(),
+          },
+        }
+      );
+    }
 
     // Target file path inside GitHub repo
     const targetFilePath = `lastpatch/${relativePath}`;
@@ -72,11 +109,16 @@ export default {
       if (!githubRes.ok) {
         if (githubRes.status === 404) {
           return new Response(
-            JSON.stringify({
-              error: 'Not Found',
-              message: `File '${targetFilePath}' does not exist in branch '${branch}'.`,
-              repo: `${owner}/${repo}`,
-            }),
+            JSON.stringify(
+              {
+                error: 'Not Found',
+                message: `File '${targetFilePath}' does not exist in branch '${branch}'.`,
+                repo: `${owner}/${repo}`,
+                checked_url: githubRawUrl,
+              },
+              null,
+              2
+            ),
             {
               status: 404,
               headers: {
@@ -110,7 +152,7 @@ export default {
           });
         }
 
-        // Dynamically resolve patch_url to this Worker instance
+        // Dynamically resolve patch_url to this Worker instance so Flutter client downloads via worker
         if (manifestData.patch_url && !manifestData.patch_url.startsWith('http://') && !manifestData.patch_url.startsWith('https://')) {
           const cleanPatchPath = manifestData.patch_url.replace(/^\/+/, '');
           manifestData.patch_url = `${url.origin}/${cleanPatchPath}`;
@@ -155,7 +197,7 @@ export default {
       // Chunk read -> Chunk write TransformStream pipeline
       const { readable, writable } = new TransformStream({
         transform(chunk, controller) {
-          // Stream chunks as they arrive directly to the client without buffering
+          // Stream chunks as they arrive directly to client without buffering
           controller.enqueue(chunk);
         },
       });

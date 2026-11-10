@@ -13,10 +13,13 @@ on:
       - 'worker/**'
   workflow_dispatch:
     inputs:
-      force_native:
-        description: 'Force full native release APK compilation (equivalent to {{native}} commit)'
-        type: boolean
-        default: false
+      action_type:
+        description: 'Choose action type to execute manually'
+        type: choice
+        options:
+          - patch
+          - native
+        default: 'patch'
 
 permissions:
   contents: write
@@ -34,30 +37,51 @@ jobs:
           fetch-depth: 2
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Inspect Commit Message for {{native}} Trigger
+      - name: Inspect Commit Message for {{patch}} or {{native}} Triggers
         id: mode_check
         run: |
           COMMIT_MSG="${{ github.event.head_commit.message }}"
-          FORCE_NATIVE="${{ github.event.inputs.force_native }}"
+          MANUAL_CHOICE="${{ github.event.inputs.action_type }}"
 
           echo "Commit message: $COMMIT_MSG"
-          echo "Force native input: $FORCE_NATIVE"
+          echo "Manual choice: $MANUAL_CHOICE"
 
-          if [[ "$COMMIT_MSG" == *"{{native}}"* ]] || [[ "$COMMIT_MSG" == *"[native]"* ]] || [ "$FORCE_NATIVE" = "true" ]; then
+          if [[ "$COMMIT_MSG" == *"{{native}}"* ]] || [[ "$COMMIT_MSG" == *"[native]"* ]] || [ "$MANUAL_CHOICE" = "native" ]; then
             echo "mode=native" >> $GITHUB_OUTPUT
             echo "TRIGGER: Full native APK rebuild requested."
-          else
+          elif [[ "$COMMIT_MSG" == *"{{patch}}"* ]] || [[ "$COMMIT_MSG" == *"[patch]"* ]] || [ "$MANUAL_CHOICE" = "patch" ]; then
             echo "mode=patch" >> $GITHUB_OUTPUT
-            echo "TRIGGER: Dart-only OTA patch update requested."
+            echo "TRIGGER: OTA patch generation requested via {{patch}}."
+          else
+            echo "mode=skip" >> $GITHUB_OUTPUT
+            echo "TRIGGER: Neither {{patch}} nor {{native}} found. Skipping action."
           fi
 
+      # -------------------------------------------------------------
+      # SKIP NOTICE: When neither {{patch}} nor {{native}} is present
+      # -------------------------------------------------------------
+      - name: Log Skipped Execution
+        if: steps.mode_check.outputs.mode == 'skip'
+        run: |
+          echo "=========================================================="
+          echo "⏭️ SKIPPED: Commit message does not contain {{patch}} or {{native}}."
+          echo "No compilation or patching performed. CI runner saved."
+          echo "To trigger an OTA patch, push with {{patch}}."
+          echo "To trigger a full native rebuild, push with {{native}}."
+          echo "=========================================================="
+
+      # -------------------------------------------------------------
+      # ENVIRONMENT SETUP (Only when NOT skipped)
+      # -------------------------------------------------------------
       - name: Setup Java 17
+        if: steps.mode_check.outputs.mode != 'skip'
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Flutter SDK
+        if: steps.mode_check.outputs.mode != 'skip'
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
@@ -68,6 +92,7 @@ jobs:
       # Aggressive Caching: Gradle, Pub, Build Artifacts, Keys
       # -------------------------------------------------------------
       - name: Aggressive Gradle & Pub Cache
+        if: steps.mode_check.outputs.mode != 'skip'
         uses: actions/cache@v4
         with:
           path: |
@@ -82,6 +107,7 @@ jobs:
             aggressive-build-cache-${{ runner.os }}-
 
       - name: Baseline Release & Patcher Keys Cache
+        if: steps.mode_check.outputs.mode != 'skip'
         id: baseline_cache
         uses: actions/cache@v4
         with:
@@ -94,6 +120,7 @@ jobs:
             patcher-baseline-${{ runner.os }}-
 
       - name: Ensure Signing Keystore Exists
+        if: steps.mode_check.outputs.mode != 'skip'
         run: |
           mkdir -p android/app
           if [ ! -f "android/app/release.keystore" ]; then
@@ -102,6 +129,7 @@ jobs:
           fi
 
       - name: Install Flutter & Dart Dependencies
+        if: steps.mode_check.outputs.mode != 'skip'
         run: |
           flutter pub get
 
@@ -148,13 +176,13 @@ jobs:
           echo "✅ Release APK compiled and saved to apk/app-release.apk"
 
       # =============================================================
-      # BRANCH 2: OTA PATCH BUILD (Triggered when {{native}} omitted)
+      # BRANCH 2: OTA PATCH BUILD (Triggered by {{patch}})
       # =============================================================
       - name: Generate Production OTA Patch
         if: steps.mode_check.outputs.mode == 'patch'
         run: |
           echo "=========================================================="
-          echo "⚡ OTA PATCH MODE (Dart & Assets Update)"
+          echo "⚡ OTA PATCH MODE (Triggered by {{patch}})"
           echo "=========================================================="
 
           # Verify baseline exists
@@ -224,9 +252,10 @@ jobs:
           echo "✅ Patch $PATCH_VER generated and saved to /lastpatch"
 
       # -------------------------------------------------------------
-      # Commit artifacts back to GitHub repository
+      # Commit artifacts back to GitHub repository (Only if NOT skipped)
       # -------------------------------------------------------------
       - name: Commit & Push Release Artifacts to GitHub
+        if: steps.mode_check.outputs.mode != 'skip'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"

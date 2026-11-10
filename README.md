@@ -62,9 +62,11 @@ Full Android Gradle / Flutter compilation is offloaded to **GitHub Actions**, wh
 
 ---
 
-## Dual-Mode Git Commit Workflow
+## Git Commit Trigger System
 
-### Mode 1: Full Native Rebuild (`{{native}}`)
+The GitHub Actions workflow uses explicit triggers to conserve CI resources and avoid accidental rebuilds:
+
+### 1. Full Native Rebuild (`{{native}}`)
 Whenever you add native Android plugins, modify Gradle scripts, update Flutter SDK, or need a fresh base APK:
 ```bash
 git commit -m "feat: added new native library {{native}}"
@@ -78,20 +80,74 @@ git push
   5. Resets `/lastpatch/manifest.json` (`has_update: false`).
   6. You install `apk/app-release.apk` once on your test device.
 
-### Mode 2: Instant OTA Hotfix / Patch (Default)
+### 2. Instant OTA Hotfix / Patch (`{{patch}}`)
 When changing Dart code, widgets, business logic, or assets:
 ```bash
-git commit -m "fix: updated checkout button color and text"
+git commit -m "fix: updated checkout button color and text {{patch}}"
 git push
 ```
 - **What happens:**
-  1. GitHub Actions detects no `{{native}}` tag.
+  1. GitHub Actions detects `{{patch}}`.
   2. Restores warm Gradle and Flutter build caches.
   3. Computes the diff against the baseline release.
-  4. Builds `patch.zip` and signs/hashes it.
+  4. Builds `patch.zip` and calculates its MD5 hash.
   5. Updates `/lastpatch/manifest.json` with the new MD5 hash and version code.
   6. Archives to `/patch/<version>/`.
   7. Mobile app checks Cloudflare Worker, downloads the patch, and applies it dynamically!
+
+### 3. Normal Commits (Skip Action)
+When committing without `{{native}}` or `{{patch}}` (e.g. documentation, comments, minor edits):
+```bash
+git commit -m "docs: updated project notes"
+git push
+```
+- **What happens:** The GitHub Action immediately **skips** the build and patch process, saving 100% of your GitHub Action runner minutes.
+
+---
+
+## What the Patching URL Shows
+
+When your mobile app or browser accesses the Cloudflare Worker URL (e.g. `https://flutter-patch-worker.<subdomain>.workers.dev`), the worker serves the contents of `/lastpatch` dynamically:
+
+### 1. Root / Manifest Endpoint (`GET /` or `GET /manifest.json`)
+The worker returns the active patch manifest JSON:
+```json
+{
+  "has_update": true,
+  "version": "1.0.0-h1",
+  "patch_url": "https://flutter-patch-worker.your-subdomain.workers.dev/patch.zip",
+  "md5": "e2c569f313b30095a55d6f96be5087c5",
+  "target_version_code": 1,
+  "created_at": "2026-11-10T04:40:00Z",
+  "commit": "8d52416..."
+}
+```
+* **Dynamic Resolution:** Even if `lastpatch/manifest.json` in the git repository contains relative paths (like `/patch.zip`), the Cloudflare Worker automatically rewrites `"patch_url"` to its own public URL (`https://<worker-domain>/patch.zip`), ensuring the Flutter client always downloads through the streaming worker gateway.
+
+### 2. Patch Payload Stream (`GET /patch.zip`)
+Streams `lastpatch/patch.zip` directly from GitHub using low-RAM Web Streams (`TransformStream`).
+* **Content-Type:** `application/zip`
+* **Streaming Model:** Zero-buffer chunk-by-chunk streaming (`chunk read -> chunk write`).
+* **Cache-Control:** Edge-cached to ensure fast downloads across devices.
+
+### 3. Health & Diagnostic Endpoint (`GET /status` or `GET /health`)
+Returns JSON detailing the upstream GitHub repository, branch, and active endpoint URLs for easy verification:
+```json
+{
+  "service": "Flutter Patcher OTA Streamer",
+  "status": "operational",
+  "upstream": {
+    "owner": "your-username",
+    "repo": "flutter_remote_dev",
+    "branch": "main",
+    "path": "lastpatch/"
+  },
+  "endpoints": {
+    "manifest": "https://<worker-domain>/manifest.json",
+    "patch_zip": "https://<worker-domain>/patch.zip"
+  }
+}
+```
 
 ---
 
