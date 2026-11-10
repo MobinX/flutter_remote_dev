@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../config/api_config.dart';
 import '../../config/app_theme.dart';
 import '../../models/customer.dart';
 import '../../providers/business_provider.dart';
-import '../../services/api_service.dart';
+import '../../providers/customers_provider.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/empty_state.dart';
 import 'customer_detail_screen.dart';
@@ -18,14 +17,16 @@ class CustomersScreen extends StatefulWidget {
 
 class _CustomersScreenState extends State<CustomersScreen> {
   final _searchController = TextEditingController();
-  List<CustomerModel> _customers = [];
-  bool _isLoading = false;
-  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _loadCustomers();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final biz = context.read<BusinessProvider>();
+      if (biz.currentBusiness != null) {
+        context.read<CustomersProvider>().fetchCustomers(biz.currentBusiness!.id);
+      }
+    });
   }
 
   @override
@@ -34,49 +35,128 @@ class _CustomersScreenState extends State<CustomersScreen> {
     super.dispose();
   }
 
-  void _loadCustomers() async {
-    final biz = context.read<BusinessProvider>();
-    if (biz.currentBusiness == null) return;
-    final bId = biz.currentBusiness!.id;
-    final api = context.read<ApiService>();
+  void _showAddCustomerDialog(String businessId) {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
 
-    setState(() => _isLoading = true);
-    try {
-      final res = await api.get(ApiConfig.pathCustomers(bId, limit: 100));
-      if (res is Map && res['customers'] is List) {
-        _customers = (res['customers'] as List)
-            .map((c) => CustomerModel.fromJson(c as Map<String, dynamic>))
-            .toList();
-      } else if (res is List) {
-        _customers = res.map((c) => CustomerModel.fromJson(c as Map<String, dynamic>)).toList();
-      }
-      setState(() => _isLoading = false);
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = e.toString();
-      });
-    }
-  }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add New Customer'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Customer Name *',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Phone Number',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email Address',
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: addressCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Delivery Address',
+                  prefixIcon: Icon(Icons.location_on_outlined),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              final phone = phoneCtrl.text.trim();
+              final email = emailCtrl.text.trim();
+              final address = addressCtrl.text.trim();
 
-  List<CustomerModel> get _filteredCustomers {
-    final q = _searchController.text.trim().toLowerCase();
-    if (q.isEmpty) return _customers;
-    return _customers.where((c) {
-      final n = c.name.toLowerCase();
-      final p = (c.phone ?? '').toLowerCase();
-      final e = (c.email ?? '').toLowerCase();
-      return n.contains(q) || p.contains(q) || e.contains(q);
-    }).toList();
+              Navigator.pop(ctx);
+
+              final payload = <String, dynamic>{
+                'name': name,
+                if (phone.isNotEmpty) 'phone': phone,
+                if (email.isNotEmpty) 'email': email,
+                if (address.isNotEmpty) 'address': address,
+              };
+
+              final customers = context.read<CustomersProvider>();
+              final ok = await customers.createCustomer(businessId, payload);
+              if (ok && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Customer added successfully!'), backgroundColor: AppTheme.success),
+                );
+              } else if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(customers.errorMessage ?? 'Failed to add customer'),
+                    backgroundColor: AppTheme.danger,
+                  ),
+                );
+              }
+            },
+            child: const Text('Add Customer'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final biz = context.watch<BusinessProvider>();
+    final customers = context.watch<CustomersProvider>();
+    final currentStore = biz.currentBusiness;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final list = _filteredCustomers;
+    final list = customers.customers;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Customers CRM')),
+      appBar: AppBar(
+        title: const Text('Customers CRM'),
+        actions: [
+          if (currentStore != null)
+            IconButton(
+              icon: const Icon(Icons.person_add_outlined),
+              tooltip: 'Add Customer',
+              onPressed: () => _showAddCustomerDialog(currentStore.id),
+            ),
+        ],
+      ),
+      floatingActionButton: currentStore != null
+          ? FloatingActionButton.extended(
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+              onPressed: () => _showAddCustomerDialog(currentStore.id),
+              icon: const Icon(Icons.person_add, size: 20),
+              label: const Text('New Customer'),
+            )
+          : null,
       body: Column(
         children: [
           Container(
@@ -84,9 +164,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
             color: isDark ? AppTheme.surfaceDark : AppTheme.surfaceLight,
             child: TextField(
               controller: _searchController,
-              onChanged: (_) => setState(() {}),
+              onChanged: (q) => customers.setSearchQuery(q),
               decoration: InputDecoration(
-                hintText: 'Search customer name or phone...',
+                hintText: 'Search customer name, phone, or email...',
                 prefixIcon: const Icon(Icons.search, size: 20),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 suffixIcon: _searchController.text.isNotEmpty
@@ -94,7 +174,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                         icon: const Icon(Icons.clear, size: 18),
                         onPressed: () {
                           _searchController.clear();
-                          setState(() {});
+                          customers.setSearchQuery('');
                         },
                       )
                     : null,
@@ -105,14 +185,20 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () async => _loadCustomers(),
-              child: _isLoading
+              onRefresh: () async {
+                if (currentStore != null) {
+                  await customers.fetchCustomers(currentStore.id);
+                }
+              },
+              child: customers.isLoading && list.isEmpty
                   ? const Center(child: CircularProgressIndicator())
                   : list.isEmpty
                       ? EmptyState(
                           icon: Icons.people_outline,
                           title: 'No Customers Yet',
-                          description: 'Customers created through Messenger or web checkout will appear in this directory.',
+                          description: 'Add customers manually or let the AI closer automatically record Messenger and web buyers.',
+                          buttonText: currentStore != null ? 'Add Customer' : null,
+                          onButtonPressed: currentStore != null ? () => _showAddCustomerDialog(currentStore.id) : null,
                         )
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
@@ -123,12 +209,17 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
                             return AppCard(
                               onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => CustomerDetailScreen(customer: c),
-                                  ),
-                                );
+                                if (currentStore != null) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => CustomerDetailScreen(
+                                        customer: c,
+                                        businessId: currentStore.id,
+                                      ),
+                                    ),
+                                  );
+                                }
                               },
                               child: Row(
                                 children: [
@@ -136,7 +227,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                     radius: 24,
                                     backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
                                     child: Text(
-                                      c.name.substring(0, 1).toUpperCase(),
+                                      c.name.isNotEmpty ? c.name.substring(0, 1).toUpperCase() : 'C',
                                       style: const TextStyle(
                                         color: AppTheme.primaryColor,
                                         fontWeight: FontWeight.bold,
@@ -155,7 +246,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          c.phone ?? c.email ?? 'No contact',
+                                          c.phone ?? c.email ?? 'No contact info',
                                           style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                                         ),
                                       ],

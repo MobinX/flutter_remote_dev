@@ -109,21 +109,15 @@ class OrdersProvider extends ChangeNotifier {
 
   Future<bool> createOrder(String businessId, Map<String, dynamic> payload) async {
     _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
 
     try {
-      final res = await apiService.post(
+      await apiService.post(
         ApiConfig.pathOrders(businessId),
         body: payload,
       );
-
-      if (res is Map<String, dynamic>) {
-        final newOrder = OrderModel.fromJson(res);
-        _orders.insert(0, newOrder);
-      } else {
-        await fetchOrders(businessId);
-      }
-
+      await fetchOrders(businessId);
       _isLoading = false;
       notifyListeners();
       return true;
@@ -133,6 +127,40 @@ class OrdersProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> updateOrderDetails(String businessId, String orderId, Map<String, dynamic> data) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await apiService.patch(
+        ApiConfig.pathOrderDetail(businessId, orderId),
+        body: data,
+      );
+      await fetchOrders(businessId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<OrderModel?> fetchOrderDetail(String businessId, String orderId) async {
+    try {
+      final res = await apiService.get(ApiConfig.pathOrderDetail(businessId, orderId));
+      if (res is Map<String, dynamic>) {
+        return OrderModel.fromJson(res);
+      }
+    } catch (e) {
+      debugPrint('[OrdersProvider] fetchOrderDetail error: $e');
+    }
+    return null;
   }
 
   Future<bool> deleteOrder(String businessId, String orderId) async {

@@ -34,6 +34,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _phoneController.text = b.phone ?? '';
       _emailController.text = b.email ?? '';
       _addressController.text = b.address ?? '';
+      if (b.agentProductGuidance != null && b.agentProductGuidance!.isNotEmpty) {
+        _aiPromptController.text = b.agentProductGuidance!;
+      }
     }
   }
 
@@ -57,12 +60,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       phone: _phoneController.text.trim(),
       email: _emailController.text.trim(),
       address: _addressController.text.trim(),
+      agentProductGuidance: _aiPromptController.text.trim(),
     );
     setState(() => _isSaving = false);
 
     if (ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings saved successfully!')),
+        const SnackBar(content: Text('Settings saved successfully!'), backgroundColor: AppTheme.success),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(biz.errorMessage ?? 'Failed to save settings'),
+          backgroundColor: AppTheme.danger,
+        ),
       );
     }
   }

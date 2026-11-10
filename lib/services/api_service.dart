@@ -148,8 +148,21 @@ class ApiService {
     }
 
     String errorMsg = 'HTTP ${res.statusCode}';
-    if (json is Map && json['error'] != null) {
-      errorMsg = json['error'].toString();
+    if (json is Map) {
+      if (json['error'] is String) {
+        errorMsg = json['error'];
+      } else if (json['error'] is Map && json['error']['issues'] is List) {
+        final issues = json['error']['issues'] as List;
+        errorMsg = issues.map((i) {
+          final path = (i['path'] as List?)?.join('.') ?? 'field';
+          final msg = i['message'] ?? 'invalid';
+          return '$path: $msg';
+        }).join(', ');
+      } else if (json['error'] != null) {
+        errorMsg = json['error'].toString();
+      } else if (json['message'] is String) {
+        errorMsg = json['message'];
+      }
     } else if (res.reasonPhrase != null && res.reasonPhrase!.isNotEmpty) {
       errorMsg = res.reasonPhrase!;
     }

@@ -135,6 +135,18 @@ class ProductsProvider extends ChangeNotifier {
     }
   }
 
+  Future<ProductModel?> fetchProductDetail(String businessId, String productId) async {
+    try {
+      final res = await apiService.get(ApiConfig.pathProductDetail(businessId, productId));
+      if (res is Map<String, dynamic>) {
+        return ProductModel.fromJson(res);
+      }
+    } catch (e) {
+      debugPrint('[ProductsProvider] fetchProductDetail error: $e');
+    }
+    return null;
+  }
+
   Future<bool> createCategory(String businessId, String name) async {
     try {
       final res = await apiService.post(
@@ -147,6 +159,34 @@ class ProductsProvider extends ChangeNotifier {
         return true;
       }
       return false;
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateCategory(String businessId, String categoryId, String name) async {
+    try {
+      await apiService.put(
+        ApiConfig.pathCategoryDetail(businessId, categoryId),
+        body: {'name': name},
+      );
+      await fetchCategories(businessId);
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteCategory(String businessId, String categoryId) async {
+    try {
+      await apiService.delete(ApiConfig.pathCategoryDetail(businessId, categoryId));
+      _categories.removeWhere((c) => c.id == categoryId);
+      notifyListeners();
+      return true;
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();

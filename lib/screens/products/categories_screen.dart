@@ -46,7 +46,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
               final biz = context.read<BusinessProvider>();
               if (biz.currentBusiness != null) {
-                await context.read<ProductsProvider>().createCategory(biz.currentBusiness!.id, name);
+                final ok = await context.read<ProductsProvider>().createCategory(biz.currentBusiness!.id, name);
+                if (!ok && mounted) {
+                  final err = context.read<ProductsProvider>().errorMessage ?? 'Failed to add category';
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(err), backgroundColor: AppTheme.danger),
+                  );
+                }
               }
             },
             child: const Text('Add'),
@@ -54,6 +60,84 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         ],
       ),
     );
+  }
+
+  void _showEditCategoryDialog(CategoryModel cat) {
+    final editController = TextEditingController(text: cat.name);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Category'),
+        content: TextField(
+          controller: editController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Category Name',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final name = editController.text.trim();
+              if (name.isEmpty) return;
+              Navigator.pop(ctx);
+
+              final biz = context.read<BusinessProvider>();
+              if (biz.currentBusiness != null) {
+                final ok = await context.read<ProductsProvider>().updateCategory(biz.currentBusiness!.id, cat.id, name);
+                if (!ok && mounted) {
+                  final err = context.read<ProductsProvider>().errorMessage ?? 'Failed to update category';
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(err), backgroundColor: AppTheme.danger),
+                  );
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Category updated')),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteCategory(CategoryModel cat) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Category?'),
+        content: Text('Are you sure you want to delete "${cat.name}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      final biz = context.read<BusinessProvider>();
+      if (biz.currentBusiness != null) {
+        final ok = await context.read<ProductsProvider>().deleteCategory(biz.currentBusiness!.id, cat.id);
+        if (ok && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Category deleted')),
+          );
+        } else if (mounted) {
+          final err = context.read<ProductsProvider>().errorMessage ?? 'Failed to delete category';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(err), backgroundColor: AppTheme.danger),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -131,6 +215,16 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                               ],
                             ],
                           ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 20),
+                          tooltip: 'Edit Category',
+                          onPressed: () => _showEditCategoryDialog(cat),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20, color: AppTheme.danger),
+                          tooltip: 'Delete Category',
+                          onPressed: () => _deleteCategory(cat),
                         ),
                       ],
                     ),

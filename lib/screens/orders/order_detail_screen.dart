@@ -88,9 +88,179 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       final orders = context.read<OrdersProvider>();
       final ok = await orders.deleteOrder(widget.businessId, _order.id);
       if (ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order deleted')),
+        );
         Navigator.pop(context);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(orders.errorMessage ?? 'Failed to delete order'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
       }
     }
+  }
+
+  void _showEditOrderDialog() {
+    final nameCtrl = TextEditingController(text: _order.customerName);
+    final phoneCtrl = TextEditingController(text: _order.customerPhone ?? '');
+    final addressCtrl = TextEditingController(text: _order.customerAddress ?? '');
+    final countCtrl = TextEditingController(text: _order.count.toString());
+    String selectedState = _order.state;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Update Order Details',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Customer Name *',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Customer Phone',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: addressCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Delivery Address',
+                    prefixIcon: Icon(Icons.location_on_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: countCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Quantity / Count',
+                          prefixIcon: Icon(Icons.numbers_outlined),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: selectedState,
+                        decoration: const InputDecoration(labelText: 'Status'),
+                        items: OrderModel.validStates.map((s) {
+                          return DropdownMenuItem(
+                            value: s,
+                            child: Text(OrderModel.stateTitle(s)),
+                          );
+                        }).toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            setModalState(() => selectedState = v);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final cName = nameCtrl.text.trim();
+                      if (cName.isEmpty) return;
+                      final count = int.tryParse(countCtrl.text.trim()) ?? _order.count;
+                      final phone = phoneCtrl.text.trim();
+                      final addr = addressCtrl.text.trim();
+
+                      Navigator.pop(ctx);
+                      setState(() => _isUpdating = true);
+
+                      final orders = context.read<OrdersProvider>();
+                      final updatePayload = <String, dynamic>{
+                        'customerName': cName,
+                        'count': count,
+                        'state': selectedState,
+                        if (phone.isNotEmpty) 'customerPhone': phone,
+                        if (addr.isNotEmpty) 'customerAddress': addr,
+                      };
+
+                      final ok = await orders.updateOrderDetails(widget.businessId, _order.id, updatePayload);
+                      if (ok && mounted) {
+                        final fresh = await orders.fetchOrderDetail(widget.businessId, _order.id);
+                        setState(() {
+                          if (fresh != null) {
+                            _order = fresh;
+                          } else {
+                            final fromList = orders.allOrders.firstWhere(
+                              (o) => o.id == _order.id,
+                              orElse: () => _order,
+                            );
+                            _order = fromList;
+                          }
+                          _isUpdating = false;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Order updated successfully!'), backgroundColor: AppTheme.success),
+                        );
+                      } else if (mounted) {
+                        setState(() => _isUpdating = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(orders.errorMessage ?? 'Failed to update order'),
+                            backgroundColor: AppTheme.danger,
+                          ),
+                        );
+                      }
+                    },
+                    child: const Text('Save Order Changes'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -114,7 +284,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         title: Text('Order ${_order.shortOrderNumber}'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Edit Order',
+            onPressed: _showEditOrderDialog,
+          ),
+          IconButton(
             icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
+            tooltip: 'Delete Order',
             onPressed: _deleteOrder,
           ),
         ],
@@ -239,7 +415,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Customer & Delivery Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Customer & Delivery Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    TextButton.icon(
+                      onPressed: _showEditOrderDialog,
+                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      label: const Text('Edit'),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 ListTile(
                   contentPadding: EdgeInsets.zero,

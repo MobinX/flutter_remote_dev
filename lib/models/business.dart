@@ -8,7 +8,10 @@ class BusinessModel {
   final String? website;
   final String? address;
   final bool agentState;
+  final String? storeTheme;
   final String? storePreset;
+  final String? agentProductGuidance;
+  final String? agentBargainGuidance;
   final List<dynamic>? deliveryZones;
   final List<dynamic>? paymentMethods;
   final String? paymentStrategy;
@@ -24,7 +27,10 @@ class BusinessModel {
     this.website,
     this.address,
     this.agentState = true,
+    this.storeTheme,
     this.storePreset,
+    this.agentProductGuidance,
+    this.agentBargainGuidance,
     this.deliveryZones,
     this.paymentMethods,
     this.paymentStrategy,
@@ -42,7 +48,10 @@ class BusinessModel {
       website: json['website']?.toString(),
       address: json['address']?.toString(),
       agentState: json['agentState'] != false,
+      storeTheme: (json['storeTheme'] ?? json['storePreset'])?.toString(),
       storePreset: json['storePreset']?.toString(),
+      agentProductGuidance: json['agentProductGuidance']?.toString(),
+      agentBargainGuidance: json['agentBargainGuidance']?.toString(),
       deliveryZones: json['deliveryZones'] is List ? json['deliveryZones'] : null,
       paymentMethods: json['paymentMethods'] is List ? json['paymentMethods'] : null,
       paymentStrategy: json['paymentStrategy']?.toString(),
@@ -62,6 +71,7 @@ class BusinessModel {
         'website': website,
         'address': address,
         'agentState': agentState,
+        'storeTheme': storeTheme,
         'storePreset': storePreset,
       };
 
@@ -72,6 +82,9 @@ class BusinessModel {
     String? email,
     String? address,
     bool? agentState,
+    String? storeTheme,
+    String? agentProductGuidance,
+    String? agentBargainGuidance,
   }) {
     return BusinessModel(
       id: id,
@@ -83,7 +96,10 @@ class BusinessModel {
       website: website,
       address: address ?? this.address,
       agentState: agentState ?? this.agentState,
+      storeTheme: storeTheme ?? this.storeTheme,
       storePreset: storePreset,
+      agentProductGuidance: agentProductGuidance ?? this.agentProductGuidance,
+      agentBargainGuidance: agentBargainGuidance ?? this.agentBargainGuidance,
       deliveryZones: deliveryZones,
       paymentMethods: paymentMethods,
       paymentStrategy: paymentStrategy,

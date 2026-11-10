@@ -16,6 +16,15 @@ class StorefrontScreen extends StatefulWidget {
 class _StorefrontScreenState extends State<StorefrontScreen> {
   String _selectedTheme = 'classic';
 
+  @override
+  void initState() {
+    super.initState();
+    final b = context.read<BusinessProvider>().currentBusiness;
+    if (b?.storeTheme != null && b!.storeTheme!.isNotEmpty) {
+      _selectedTheme = b.storeTheme!;
+    }
+  }
+
   final List<Map<String, String>> _themes = [
     {
       'id': 'classic',
@@ -115,11 +124,21 @@ class _StorefrontScreenState extends State<StorefrontScreen> {
 
             return AppCard(
               border: isSelected ? const BorderSide(color: AppTheme.primaryColor, width: 2) : null,
-              onTap: () {
+              onTap: () async {
                 setState(() => _selectedTheme = t['id']!);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Applied theme: ${t["name"]}')),
-                );
+                final ok = await biz.updateStoreTheme(t['id']!);
+                if (ok && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Applied theme: ${t["name"]}'), backgroundColor: AppTheme.success),
+                  );
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(biz.errorMessage ?? 'Failed to update theme'),
+                      backgroundColor: AppTheme.danger,
+                    ),
+                  );
+                }
               },
               child: Row(
                 children: [

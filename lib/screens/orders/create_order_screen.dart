@@ -42,6 +42,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     if (widget.initialCustomerName != null) {
       _nameController.text = widget.initialCustomerName!;
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final prods = context.read<ProductsProvider>();
+      if (prods.products.isEmpty) {
+        prods.fetchProducts(widget.businessId);
+      }
+    });
   }
 
   @override
@@ -67,22 +73,36 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   void _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_selectedProduct == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a product from your catalog to place an order.'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
     final orders = context.read<OrdersProvider>();
 
-    final payload = {
+    final qty = int.tryParse(_quantityController.text.trim()) ?? 1;
+    final shipping = double.tryParse(_shippingCostController.text.trim());
+    final phone = _phoneController.text.trim();
+    final address = _addressController.text.trim();
+    final txId = _txIdController.text.trim();
+
+    final payload = <String, dynamic>{
+      'productId': _selectedProduct!.id,
+      if (_selectedProduct!.variantId != null && _selectedProduct!.variantId!.isNotEmpty)
+        'variantId': _selectedProduct!.variantId,
+      'count': qty,
       'customerName': _nameController.text.trim(),
-      'customerPhone': _phoneController.text.trim(),
-      'customerAddress': _addressController.text.trim(),
-      'productName': _selectedProduct?.name ?? _productNameController.text.trim(),
-      'count': int.tryParse(_quantityController.text) ?? 1,
-      'unitPrice': double.tryParse(_unitPriceController.text) ?? 0.0,
-      'shippingCost': double.tryParse(_shippingCostController.text) ?? 0.0,
-      'totalPrice': _totalPrice,
-      'currency': 'BDT',
+      if (phone.isNotEmpty) 'customerPhone': phone,
+      if (address.isNotEmpty) 'customerAddress': address,
+      if (shipping != null && shipping >= 0) 'shippingCost': shipping,
       'paymentMethod': _paymentMethod,
-      'transactionId': _txIdController.text.trim().isNotEmpty ? _txIdController.text.trim() : null,
-      'state': 'pending',
+      if (txId.isNotEmpty) 'transactionId': txId,
     };
 
     final ok = await orders.createOrder(widget.businessId, payload);
@@ -90,12 +110,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
     if (ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Order created successfully!')),
+        const SnackBar(
+          content: Text('Order created successfully!'),
+          backgroundColor: AppTheme.success,
+        ),
       );
       Navigator.pop(context);
-    } else if (mounted && orders.errorMessage != null) {
+    } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(orders.errorMessage!), backgroundColor: AppTheme.danger),
+        SnackBar(
+          content: Text(orders.errorMessage ?? 'Failed to create order'),
+          backgroundColor: AppTheme.danger,
+        ),
       );
     }
   }
@@ -166,16 +192,23 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Product Selection', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const Text('Product Selection *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 12),
                   if (prods.products.isNotEmpty) ...[
                     DropdownButtonFormField<ProductModel>(
                       value: _selectedProduct,
-                      decoration: const InputDecoration(labelText: 'Pick From Catalog'),
+                      decoration: const InputDecoration(
+                        labelText: 'Select Product From Catalog *',
+                        prefixIcon: Icon(Icons.inventory_2_outlined),
+                      ),
+                      validator: (p) => p == null && _selectedProduct == null ? 'Please select a product' : null,
                       items: prods.products.map((p) {
                         return DropdownMenuItem(
                           value: p,
-                          child: Text('${p.name} (৳${p.price.toStringAsFixed(0)})'),
+                          child: Text(
+                            '${p.name} (৳${p.price.toStringAsFixed(0)})',
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         );
                       }).toList(),
                       onChanged: (p) {
@@ -189,20 +222,41 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       },
                     ),
                     const SizedBox(height: 12),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amber.shade400),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'No products found in catalog. Create a product first to place orders.',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                   ],
-                  TextFormField(
-                    controller: _productNameController,
-                    decoration: const InputDecoration(labelText: 'Product Name / Items *'),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter product name' : null,
-                  ),
-                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
                         child: TextFormField(
                           controller: _quantityController,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: 'Quantity'),
+                          decoration: const InputDecoration(labelText: 'Quantity *'),
+                          validator: (v) {
+                            final n = int.tryParse(v ?? '');
+                            if (n == null || n <= 0) return 'Min 1';
+                            return null;
+                          },
                           onChanged: (_) => setState(() {}),
                         ),
                       ),

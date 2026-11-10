@@ -75,6 +75,8 @@ class ApiConfig {
       '/$businessId/products/$productId';
   static String pathCategories(String businessId) =>
       '/$businessId/categories';
+  static String pathCategoryDetail(String businessId, String categoryId) =>
+      '/$businessId/categories/$categoryId';
 
   static String pathCustomers(String businessId, {String? search, int limit = 50}) {
     var p = '/$businessId/customers?limit=$limit';

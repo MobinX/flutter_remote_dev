@@ -71,6 +71,13 @@ class _BusinessPickerScreenState extends State<BusinessPickerScreen> {
               );
               if (success && mounted && biz.currentBusiness != null) {
                 await context.read<AuthProvider>().selectBusiness(biz.currentBusiness!.id);
+              } else if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(biz.errorMessage ?? 'Failed to create business'),
+                    backgroundColor: AppTheme.danger,
+                  ),
+                );
               }
             },
             child: const Text('Create Store'),

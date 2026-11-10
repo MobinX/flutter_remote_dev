@@ -31,6 +31,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   late TextEditingController _imageUrlController;
 
   String? _selectedCategoryId;
+  String? _existingVariantId;
   bool _isSaving = false;
 
   bool get _isEditing => widget.product != null;
@@ -47,6 +48,29 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _skuController = TextEditingController(text: p?.sku ?? '');
     _imageUrlController = TextEditingController(text: p?.imageUrl ?? '');
     _selectedCategoryId = p?.categoryId;
+    _existingVariantId = p?.variantId;
+
+    if (_isEditing) {
+      _loadProductDetails();
+    }
+  }
+
+  void _loadProductDetails() async {
+    final prods = context.read<ProductsProvider>();
+    final detailed = await prods.fetchProductDetail(widget.businessId, widget.product!.id);
+    if (detailed != null && mounted) {
+      setState(() {
+        if (_existingVariantId == null && detailed.variantId != null) {
+          _existingVariantId = detailed.variantId;
+        }
+        if (_stockController.text == '0' && detailed.stock > 0) {
+          _stockController.text = detailed.stock.toString();
+        }
+        if (_imageUrlController.text.isEmpty && detailed.imageUrl != null) {
+          _imageUrlController.text = detailed.imageUrl!;
+        }
+      });
+    }
   }
 
   @override
@@ -67,15 +91,32 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     setState(() => _isSaving = true);
     final prods = context.read<ProductsProvider>();
 
-    final payload = {
+    final price = double.tryParse(_priceController.text.trim()) ?? 0.0;
+    final stock = int.tryParse(_stockController.text.trim()) ?? 0;
+    final sku = _skuController.text.trim().isNotEmpty
+        ? _skuController.text.trim()
+        : 'SKU-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final desc = _descController.text.trim();
+    final imgUrl = _imageUrlController.text.trim();
+
+    final variantItem = <String, dynamic>{
+      if (_existingVariantId != null && _existingVariantId!.isNotEmpty)
+        'id': _existingVariantId,
+      'name': 'Default',
+      'stock': stock,
+      'price': price,
+      if (imgUrl.isNotEmpty) 'imageUrl': imgUrl,
+    };
+
+    final payload = <String, dynamic>{
       'name': _nameController.text.trim(),
-      'description': _descController.text.trim().isNotEmpty ? _descController.text.trim() : null,
-      'price': double.tryParse(_priceController.text) ?? 0.0,
-      'regularPrice': _regularPriceController.text.trim().isNotEmpty ? double.tryParse(_regularPriceController.text) : null,
-      'stock': int.tryParse(_stockController.text) ?? 0,
-      'sku': _skuController.text.trim().isNotEmpty ? _skuController.text.trim() : null,
-      'imageUrl': _imageUrlController.text.trim().isNotEmpty ? _imageUrlController.text.trim() : null,
-      'categoryId': _selectedCategoryId,
+      'price': price,
+      'currency': 'BDT',
+      'sku': sku,
+      if (desc.isNotEmpty) 'description': desc,
+      if (_selectedCategoryId != null && _selectedCategoryId!.isNotEmpty)
+        'categoryId': _selectedCategoryId,
+      'variants': [variantItem],
     };
 
     bool ok;
@@ -89,9 +130,19 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
     if (ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isEditing ? 'Product updated' : 'Product created')),
+        SnackBar(
+          content: Text(_isEditing ? 'Product updated successfully' : 'Product created successfully'),
+          backgroundColor: AppTheme.success,
+        ),
       );
       Navigator.pop(context);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(prods.errorMessage ?? 'Failed to save product. Please check fields.'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
     }
   }
 
@@ -116,7 +167,17 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       final prods = context.read<ProductsProvider>();
       final ok = await prods.deleteProduct(widget.businessId, widget.product!.id);
       if (ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product removed from catalog')),
+        );
         Navigator.pop(context);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(prods.errorMessage ?? 'Failed to delete product'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
       }
     }
   }

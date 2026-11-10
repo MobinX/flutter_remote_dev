@@ -168,20 +168,26 @@ class BusinessProvider extends ChangeNotifier {
     String? phone,
     String? email,
     String? address,
+    String? agentProductGuidance,
+    String? agentBargainGuidance,
   }) async {
     if (_currentBusiness == null) return false;
     final bId = _currentBusiness!.id;
 
     try {
+      final payload = <String, dynamic>{
+        'name': name,
+        if (description != null) 'description': description,
+        if (phone != null) 'phone': phone,
+        if (email != null) 'email': email,
+        if (address != null) 'address': address,
+        if (agentProductGuidance != null) 'agentProductGuidance': agentProductGuidance,
+        if (agentBargainGuidance != null) 'agentBargainGuidance': agentBargainGuidance,
+      };
+
       await apiService.put(
         ApiConfig.pathBusiness(bId),
-        body: {
-          'name': name,
-          'description': description,
-          'phone': phone,
-          'email': email,
-          'address': address,
-        },
+        body: payload,
       );
       _currentBusiness = _currentBusiness!.copyWith(
         name: name,
@@ -189,7 +195,28 @@ class BusinessProvider extends ChangeNotifier {
         phone: phone,
         email: email,
         address: address,
+        agentProductGuidance: agentProductGuidance,
+        agentBargainGuidance: agentBargainGuidance,
       );
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateStoreTheme(String theme) async {
+    if (_currentBusiness == null) return false;
+    final bId = _currentBusiness!.id;
+
+    try {
+      await apiService.put(
+        ApiConfig.pathBusiness(bId),
+        body: {'storeTheme': theme},
+      );
+      _currentBusiness = _currentBusiness!.copyWith(storeTheme: theme);
       notifyListeners();
       return true;
     } catch (e) {

@@ -8,6 +8,7 @@ import 'providers/business_provider.dart';
 import 'providers/inbox_provider.dart';
 import 'providers/orders_provider.dart';
 import 'providers/products_provider.dart';
+import 'providers/customers_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/business/business_picker_screen.dart';
 import 'screens/main_scaffold.dart';
@@ -40,6 +41,7 @@ void main() async {
         ChangeNotifierProvider<InboxProvider>(create: (_) => InboxProvider(apiService: apiService)),
         ChangeNotifierProvider<OrdersProvider>(create: (_) => OrdersProvider(apiService: apiService)),
         ChangeNotifierProvider<ProductsProvider>(create: (_) => ProductsProvider(apiService: apiService)),
+        ChangeNotifierProvider<CustomersProvider>(create: (_) => CustomersProvider(apiService: apiService)),
       ],
       child: const OnlyOrdersApp(),
     ),

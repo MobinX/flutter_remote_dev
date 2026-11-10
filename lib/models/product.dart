@@ -11,6 +11,7 @@ class ProductModel {
   final List<String> images;
   final String? categoryId;
   final String? categoryName;
+  final String? variantId;
   final int variantCount;
   final DateTime? createdAt;
 
@@ -27,6 +28,7 @@ class ProductModel {
     this.images = const [],
     this.categoryId,
     this.categoryName,
+    this.variantId,
     this.variantCount = 1,
     this.createdAt,
   });
@@ -55,11 +57,28 @@ class ProductModel {
     List<String> imgList = [];
     if (json['images'] is List) {
       imgList = (json['images'] as List).map((e) => e.toString()).toList();
+    } else if (json['imageUrls'] is List) {
+      imgList = (json['imageUrls'] as List).map((e) => e.toString()).toList();
     }
 
-    String? singleImg = json['imageUrl']?.toString();
+    String? singleImg = json['imageUrl']?.toString() ?? json['thumbnailUrl']?.toString();
     if (singleImg == null && imgList.isNotEmpty) {
       singleImg = imgList.first;
+    }
+
+    String? firstVarId;
+    int parsedStock = 0;
+    if (json['variants'] is List && (json['variants'] as List).isNotEmpty) {
+      final firstVar = (json['variants'] as List).first;
+      if (firstVar is Map<String, dynamic>) {
+        firstVarId = firstVar['id']?.toString();
+        parsedStock = (firstVar['stock'] as num?)?.toInt() ?? 0;
+        if (singleImg == null || singleImg.isEmpty) {
+          singleImg = firstVar['imageUrl']?.toString();
+        }
+      }
+    } else {
+      parsedStock = (json['stock'] as num?)?.toInt() ?? 0;
     }
 
     return ProductModel(
@@ -69,12 +88,13 @@ class ProductModel {
       description: json['description']?.toString(),
       price: p,
       regularPrice: rp,
-      stock: (json['stock'] as num?)?.toInt() ?? 0,
+      stock: parsedStock,
       sku: json['sku']?.toString(),
       imageUrl: singleImg,
       images: imgList,
       categoryId: json['categoryId']?.toString(),
       categoryName: json['categoryName']?.toString(),
+      variantId: firstVarId,
       variantCount: (json['variantCount'] as num?)?.toInt() ?? 1,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
