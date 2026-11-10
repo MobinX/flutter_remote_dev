@@ -37,3 +37,7 @@ worker/.wrangler/
 !/.baseline/
 !/.baseline/**
 !android/app/release.keystore
+
+# Local secrets
+.env
+*.env.local

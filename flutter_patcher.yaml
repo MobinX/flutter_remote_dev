@@ -1,13 +1,14 @@
-# flutter_patcher.yaml
-# Configuration for flutter_patcher OTA code-push hotfix system
+# Flutter Patcher Configuration
+# Generated automatically by scripts/setup_template.sh
 
-# The OTA server URL where manifest.json and patch.zip are hosted.
-url: "https://flutter-remote-dev-patch-worker.mobin-devx.workers.dev"
+patch_server:
+  manifest_url: "https://flutter-remote-dev-patch-worker.mobin-devx.workers.dev/manifest.json"
+  auto_check_update: true
+  auto_download_patch: true
+  verify_signature: true
 
-# Path to the digital signing keys
-keys:
-  public_key: "keys/public_key.pem"
-  private_key: "keys/private_key.pem"
-
-# Target ABI for Android native code patch diffing
-abi: "arm64-v8a"
+build:
+  target_platform: "android"
+  release_apk_path: "apk/app-release.apk"
+  output_patch_dir: "patch"
+  last_patch_dir: "lastpatch"

@@ -24,6 +24,18 @@ STEP_FILTER=""
 TOKEN=""
 OWNER_REPO=""
 
+# Auto-load .env if available
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$ROOT_DIR/.env" 2>/dev/null || true
+  set +a
+  if [[ -n "${GITHUB_TOKEN:-}" && -z "${TOKEN:-}" ]]; then
+    TOKEN="$GITHUB_TOKEN"
+  fi
+fi
+
 usage() {
   cat << EOF
 ${BOLD}Usage:${NC} $(basename "$0") [OPTIONS]

@@ -94,7 +94,7 @@ When creating a new Flutter application, developers usually waste hours configur
 
 ## 3. Quick Start: Using This Template for Any New App
 
-To use this setup for your own new Flutter app, you do **not** need to rebuild the infrastructure. Follow these simple steps:
+To use this setup for your own new Flutter app, you do **not** need to manually configure permissions, worker endpoints, or tokens.
 
 ### Step 1: Use Template or Clone
 ```bash
@@ -103,33 +103,63 @@ cd my_new_app
 git remote set-url origin https://github.com/<YOUR_USER>/<YOUR_NEW_REPO>.git
 ```
 
-### Step 2: Add Your Code
-- Put your Flutter screens, models, and logic into `lib/`.
-- Add whatever packages you need into `pubspec.yaml`.
-
-### Step 3: Configure GitHub Permissions & Secrets
-In your GitHub repository settings:
-1. Go to **Settings > Actions > General > Workflow permissions**.
-2. Select **Read and write permissions** (allows the workflow to commit the generated APK and `/lastpatch` back to your repo).
-3. If your repository is private or you are pushing with a Personal Access Token (PAT), add repository secret `PAT` with `repo` permissions.
-
-### Step 4: Deploy Your Cloudflare Worker (One-Time)
-Inside the `worker/` directory:
+### Step 2: One-Command Automated Setup (Recommended)
+Run the bundled onboarding script:
 ```bash
-cd worker
-npm install
-# Edit wrangler.toml with your repo details if needed:
-# GITHUB_OWNER = "your-github-username"
-# GITHUB_REPO  = "your-repo-name"
-npx wrangler deploy
+./scripts/setup_template.sh
 ```
-Copy your worker URL (e.g. `https://my-patch-worker.workers.dev`) and paste it into `flutter_patcher.yaml`:
-```yaml
-patch_server:
-  manifest_url: "https://my-patch-worker.workers.dev/manifest.json"
+Or non-interactively by supplying your tokens:
+```bash
+./scripts/setup_template.sh \
+  --github-token "ghp_yourGithubPersonalAccessToken" \
+  --cf-token "cfat_yourCloudflareApiToken" \
+  --yes
 ```
 
-### Step 5: Trigger the Initial Native Build
+#### What `setup_template.sh` Automatically Does:
+1. **GitHub Actions Write Permission API Call:**
+   Calls `PUT /repos/:owner/:repo/actions/permissions/workflow` with `{"default_workflow_permissions": "write"}` so the CI runner can push the generated APK and `/lastpatch` artifacts back to the repository without manual browser settings.
+2. **Authenticated Git Origin Setup:**
+   Configures your local Git remote with your GitHub token so your VPS can push cleanly.
+3. **Cloudflare Account & Worker Auto-Deployment:**
+   Detects your Cloudflare Account ID and workers subdomain, updates `worker/wrangler.toml` with your new repository name, and deploys the streaming worker via Wrangler.
+4. **Endpoint Linking:**
+   Injects the deployed worker live URL directly into `flutter_patcher.yaml`.
+5. **Secure Local Persistence (`.env`):**
+   Saves credentials in `.env` with strict permissions (`chmod 600`), adds `.env` to `.gitignore`, and makes `./scripts/watch.sh` work instantly without entering tokens again.
+
+---
+
+### Alternative: Manual Step-by-Step Setup
+
+If you prefer manual configuration without running the onboarding script:
+
+1. **Enable GitHub Actions Permissions Manually:**
+   - In GitHub, navigate to **Settings > Actions > General > Workflow permissions**.
+   - Check **Read and write permissions**.
+2. **Deploy Cloudflare Worker:**
+   ```bash
+   cd worker
+   npm install
+   # Update wrangler.toml with your GITHUB_OWNER and GITHUB_REPO
+   npx wrangler deploy
+   ```
+3. **Update Client Config:**
+   - Copy the worker URL from the deploy output and update `flutter_patcher.yaml`:
+     ```yaml
+     patch_server:
+       manifest_url: "https://<your-worker>.workers.dev/manifest.json"
+     ```
+4. **Create `.env`:**
+   ```bash
+   cp .env.example .env
+   # Add your GITHUB_TOKEN and CLOUDFLARE_API_TOKEN
+   chmod 600 .env
+   ```
+
+---
+
+### Step 3: Trigger the Initial Native Build
 Run:
 ```bash
 git add .
