@@ -4,7 +4,7 @@
 # Designed for low-spec VPS / headless CLI development.
 # ==============================================================================
 
-set -eo pipefail
+set -o pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -329,9 +329,9 @@ watch_run() {
     local jobs_json
     jobs_json=$(get_jobs_data)
 
-    # Clear screen if in terminal interactive mode
-    if [[ -t 1 ]]; then
-      clear
+    # Clear screen if in terminal interactive mode with valid TERM
+    if [[ -t 1 && -n "${TERM:-}" && "${TERM}" != "dumb" ]]; then
+      clear 2>/dev/null || true
     fi
 
     echo -e "${BOLD}${CYAN}=== GitHub Actions Live Monitor ===${NC} ($(date '+%Y-%m-%d %H:%M:%S'))"
