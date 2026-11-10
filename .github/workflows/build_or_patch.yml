@@ -1,0 +1,244 @@
+name: Flutter CI/CD - Build Release APK or Generate OTA Patch
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - 'apk/**'
+      - 'patch/**'
+      - 'lastpatch/**'
+      - 'README.md'
+      - 'worker/**'
+  workflow_dispatch:
+    inputs:
+      force_native:
+        description: 'Force full native release APK compilation (equivalent to {{native}} commit)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build_or_patch:
+    name: Build Native APK or OTA Patch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Inspect Commit Message for {{native}} Trigger
+        id: mode_check
+        run: |
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          FORCE_NATIVE="${{ github.event.inputs.force_native }}"
+
+          echo "Commit message: $COMMIT_MSG"
+          echo "Force native input: $FORCE_NATIVE"
+
+          if [[ "$COMMIT_MSG" == *"{{native}}"* ]] || [[ "$COMMIT_MSG" == *"[native]"* ]] || [ "$FORCE_NATIVE" = "true" ]; then
+            echo "mode=native" >> $GITHUB_OUTPUT
+            echo "TRIGGER: Full native APK rebuild requested."
+          else
+            echo "mode=patch" >> $GITHUB_OUTPUT
+            echo "TRIGGER: Dart-only OTA patch update requested."
+          fi
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+          cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
+
+      # -------------------------------------------------------------
+      # Aggressive Caching: Gradle, Pub, Build Artifacts, Keys
+      # -------------------------------------------------------------
+      - name: Aggressive Gradle & Pub Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.pub-cache
+            ~/.android/build-cache
+            build
+            .dart_tool
+          key: aggressive-build-cache-${{ runner.os }}-${{ hashFiles('**/pubspec.lock', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            aggressive-build-cache-${{ runner.os }}-
+
+      - name: Baseline Release & Patcher Keys Cache
+        id: baseline_cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .baseline
+            keys
+            android/app/release.keystore
+          key: patcher-baseline-${{ runner.os }}-${{ hashFiles('android/app/release.keystore') }}
+          restore-keys: |
+            patcher-baseline-${{ runner.os }}-
+
+      - name: Ensure Signing Keystore Exists
+        run: |
+          mkdir -p android/app
+          if [ ! -f "android/app/release.keystore" ]; then
+            echo "Generating persistent release keystore..."
+            bash scripts/gen_keystore.sh
+          fi
+
+      - name: Install Flutter & Dart Dependencies
+        run: |
+          flutter pub get
+
+      # =============================================================
+      # BRANCH 1: FULL NATIVE BUILD (Triggered by {{native}})
+      # =============================================================
+      - name: Full Native Release Build
+        if: steps.mode_check.outputs.mode == 'native'
+        run: |
+          echo "=========================================================="
+          echo "🚀 FULL NATIVE BUILD MODE (Triggered by {{native}})"
+          echo "=========================================================="
+
+          # 1. Reset baseline and previous patcher keys
+          rm -rf .baseline keys/private_key.pem keys/public_key.pem dist/
+          mkdir -p keys .baseline apk lastpatch patch
+
+          # 2. Initialize new patcher keys
+          echo "Initializing Flutter Patcher signing keys..."
+          dart run flutter_patcher keys init || true
+
+          # 3. Build release APK
+          echo "Compiling signed production release APK..."
+          flutter build apk --release
+
+          # 4. Copy release APK to /apk and archive baseline for diffing
+          cp build/app/outputs/flutter-apk/app-release.apk apk/app-release.apk
+          cp build/app/outputs/flutter-apk/app-release.apk .baseline/base-app-release.apk
+
+          # 5. Clean up lastpatch directory and reset manifest
+          rm -f lastpatch/patch.zip
+          cat <<EOF > lastpatch/manifest.json
+          {
+            "has_update": false,
+            "version": "1.0.0",
+            "patch_url": "/patch.zip",
+            "md5": "",
+            "target_version_code": 1,
+            "created_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "note": "Fresh native baseline release. No patches active."
+          }
+          EOF
+
+          echo "✅ Release APK compiled and saved to apk/app-release.apk"
+
+      # =============================================================
+      # BRANCH 2: OTA PATCH BUILD (Triggered when {{native}} omitted)
+      # =============================================================
+      - name: Generate Production OTA Patch
+        if: steps.mode_check.outputs.mode == 'patch'
+        run: |
+          echo "=========================================================="
+          echo "⚡ OTA PATCH MODE (Dart & Assets Update)"
+          echo "=========================================================="
+
+          # Verify baseline exists
+          if [ ! -f ".baseline/base-app-release.apk" ] && [ -f "apk/app-release.apk" ]; then
+            mkdir -p .baseline
+            cp apk/app-release.apk .baseline/base-app-release.apk
+          fi
+
+          # Fast incremental compilation of updated Dart bundle
+          flutter build apk --release
+
+          # Compute patch version based on timestamp / commit count
+          PATCH_NUM=$(git rev-list --count HEAD)
+          PATCH_VER="1.0.0-h${PATCH_NUM}"
+          echo "Generating Patch Version: $PATCH_VER"
+
+          # Run flutter_patcher pack / diff
+          mkdir -p dist
+          dart run flutter_patcher:pack \
+            --apk build/app/outputs/flutter-apk/app-release.apk \
+            --version "$PATCH_VER" \
+            --target-version-code 1 || {
+              echo "Standard pack fallback: generating patch archive..."
+              # Fallback packing if tool command variants differ
+              mkdir -p dist
+              cd build/app/outputs/flutter-apk/
+              unzip -q -o app-release.apk "lib/arm64-v8a/libapp.so" -d /tmp/patch_extracted || true
+              cd -
+              if [ -d "/tmp/patch_extracted" ]; then
+                cd /tmp/patch_extracted && zip -r "$GITHUB_WORKSPACE/dist/patch.zip" . && cd -
+              fi
+            }
+
+          # Verify patch file creation
+          if [ ! -f "dist/patch.zip" ]; then
+            echo "Creating patch bundle from compiled libapp.so..."
+            mkdir -p /tmp/patch_bundle/lib/arm64-v8a
+            unzip -p build/app/outputs/flutter-apk/app-release.apk "lib/arm64-v8a/libapp.so" > /tmp/patch_bundle/lib/arm64-v8a/libapp.so
+            cd /tmp/patch_bundle && zip -r "$GITHUB_WORKSPACE/dist/patch.zip" lib/ && cd -
+          fi
+
+          # Calculate MD5 checksum of the generated patch
+          PATCH_MD5=$(md5sum dist/patch.zip | cut -d' ' -f1)
+          echo "Generated Patch MD5: $PATCH_MD5"
+
+          # Archive to /patch/<version>/
+          ARCHIVE_DIR="patch/${PATCH_VER}"
+          mkdir -p "$ARCHIVE_DIR" lastpatch
+          cp dist/patch.zip "$ARCHIVE_DIR/patch.zip"
+
+          # Update /lastpatch directory (production static host target)
+          cp dist/patch.zip lastpatch/patch.zip
+
+          cat <<EOF > lastpatch/manifest.json
+          {
+            "has_update": true,
+            "version": "${PATCH_VER}",
+            "patch_url": "/patch.zip",
+            "md5": "${PATCH_MD5}",
+            "target_version_code": 1,
+            "created_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+
+          cp lastpatch/manifest.json "$ARCHIVE_DIR/manifest.json"
+          echo "✅ Patch $PATCH_VER generated and saved to /lastpatch"
+
+      # -------------------------------------------------------------
+      # Commit artifacts back to GitHub repository
+      # -------------------------------------------------------------
+      - name: Commit & Push Release Artifacts to GitHub
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Add generated files
+          git add -f apk/ patch/ lastpatch/ .baseline/ keys/ 2>/dev/null || git add -f apk/ patch/ lastpatch/
+
+          # Only commit if changes exist
+          if git diff --staged --quiet; then
+            echo "No artifact changes to commit."
+          else
+            git commit -m "ci(release): [skip ci] auto-published updated apk/patch artifacts"
+            git pull --rebase origin ${{ github.ref_name }} || true
+            git push origin HEAD:${{ github.ref_name }}
+          fi

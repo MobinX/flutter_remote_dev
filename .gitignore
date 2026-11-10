@@ -1,0 +1,34 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Android
+**/android/.gradle
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+
+# Keystore properties with real secrets (exclude from git if sensitive)
+android/key.properties
+
+# Cloudflare Worker node_modules
+worker/node_modules/
+worker/.wrangler/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Exceptions: ALWAYS track apk, patch, and lastpatch directories
+!/apk/
+!/apk/**
+!/patch/
+!/patch/**
+!/lastpatch/
+!/lastpatch/**

@@ -1,0 +1,8 @@
+name = "flutter-remote-dev-patch-worker"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+[vars]
+GITHUB_OWNER = "YOUR_GITHUB_USERNAME_OR_ORG"
+GITHUB_REPO = "flutter_remote_dev"
+GITHUB_BRANCH = "main"

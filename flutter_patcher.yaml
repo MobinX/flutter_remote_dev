@@ -1,0 +1,15 @@
+# flutter_patcher.yaml
+# Configuration for flutter_patcher OTA code-push hotfix system
+
+# The OTA server URL where manifest.json and patch.zip are hosted.
+# Replace with your deployed Cloudflare Worker URL, e.g.:
+# https://flutter-patcher.YOUR_ACCOUNT.workers.dev
+url: "https://flutter-patcher.YOUR_ACCOUNT.workers.dev"
+
+# Path to the digital signing keys
+keys:
+  public_key: "keys/public_key.pem"
+  private_key: "keys/private_key.pem"
+
+# Target ABI for Android native code patch diffing
+abi: "arm64-v8a"
