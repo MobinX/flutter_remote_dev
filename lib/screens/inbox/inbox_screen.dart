@@ -232,7 +232,7 @@ class _InboxScreenState extends State<InboxScreen> {
                                           style: TextStyle(
                                             fontSize: 13,
                                             color: isPending
-                                                ? (isDark ? Colors.white : Colors.black89)
+                                                ? (isDark ? Colors.white : Colors.black87)
                                                 : Colors.grey.shade600,
                                           ),
                                           maxLines: 1,

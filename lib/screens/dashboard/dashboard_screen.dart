@@ -157,14 +157,14 @@ class DashboardScreen extends StatelessWidget {
                 value: '${stats.orders > 0 ? stats.orders : orders.totalOrdersCount}',
                 subtitle: 'Total placed',
                 icon: Icons.shopping_bag_outlined,
-                color: Colors.rose,
+                color: const Color(0xFFF43F5E),
               ),
               MetricCard(
                 title: 'Channels',
                 value: '${biz.channels.isNotEmpty ? biz.channels.length : 1}',
                 subtitle: 'Connected social',
                 icon: Icons.hub_outlined,
-                color: Colors.emerald,
+                color: const Color(0xFF10B981),
               ),
               MetricCard(
                 title: 'Conversations',
@@ -332,10 +332,10 @@ class DashboardScreen extends StatelessWidget {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.rose.withValues(alpha: 0.1),
+                        color: const Color(0xFFF43F5E).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.shopping_bag_outlined, color: Colors.rose, size: 20),
+                      child: const Icon(Icons.shopping_bag_outlined, color: Color(0xFFF43F5E), size: 20),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

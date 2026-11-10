@@ -97,7 +97,7 @@ class PatchService extends ChangeNotifier {
 
       _log('Applying patch via FlutterPatcher...');
       try {
-        await FlutterPatcher.applyPatchBytes(bytes);
+        await FlutterPatcher.applyPatchBytes(bytes, version: patchVersion);
         _log('🎉 Patch v$patchVersion applied! Restart app to load updated code.');
       } catch (err) {
         _log('FlutterPatcher install notice: $err');
