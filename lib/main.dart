@@ -161,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final patchInfo = PatchInfo(
         version: version,
         patchUrl: patchUrl,
-        md5: expectedMd5,
+        md5: expectedMd5 ?? '',
         targetVersionCode: targetVersionCode,
       );
 
