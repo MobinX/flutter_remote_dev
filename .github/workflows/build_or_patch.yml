@@ -265,18 +265,6 @@ jobs:
 
           cp lastpatch/manifest.json "$ARCHIVE_DIR/manifest.json"
           echo "✅ Patch $PATCH_VER generated and saved to /lastpatch"
-            "has_update": true,
-            "version": "${PATCH_VER}",
-            "patch_url": "/patch.zip",
-            "md5": "${PATCH_MD5}",
-            "target_version_code": 1,
-            "created_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "commit": "${{ github.sha }}"
-          }
-          EOF
-
-          cp lastpatch/manifest.json "$ARCHIVE_DIR/manifest.json"
-          echo "✅ Patch $PATCH_VER generated and saved to /lastpatch"
 
       # -------------------------------------------------------------
       # Commit artifacts back to GitHub repository (Only if NOT skipped)
