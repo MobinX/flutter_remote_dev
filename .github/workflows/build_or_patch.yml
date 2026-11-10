@@ -153,7 +153,7 @@ jobs:
 
           # 3. Build release APK
           echo "Compiling signed production release APK..."
-          flutter build apk --release
+          flutter build apk --release --android-skip-build-dependency-validation
 
           # 4. Copy release APK to /apk and archive baseline for diffing
           cp build/app/outputs/flutter-apk/app-release.apk apk/app-release.apk
@@ -192,7 +192,7 @@ jobs:
           fi
 
           # Fast incremental compilation of updated Dart bundle
-          flutter build apk --release
+          flutter build apk --release --android-skip-build-dependency-validation
 
           # Compute patch version based on timestamp / commit count
           PATCH_NUM=$(git rev-list --count HEAD)

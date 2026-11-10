@@ -25,10 +25,15 @@ worker/.wrangler/
 .vscode/
 *.iml
 
-# Exceptions: ALWAYS track apk, patch, and lastpatch directories
+# Exceptions: ALWAYS track apk, patch, lastpatch, keys, and baseline
 !/apk/
 !/apk/**
 !/patch/
 !/patch/**
 !/lastpatch/
 !/lastpatch/**
+!/keys/
+!/keys/**
+!/.baseline/
+!/.baseline/**
+!android/app/release.keystore
