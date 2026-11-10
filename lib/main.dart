@@ -64,9 +64,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Edit this block in Dart to verify OTA patches work instantly!
   // =============================================================
-  static const String dartCodeVersion = "1.0.0-h3 (Hello World Live! ✨)";
-  static const String hotfixMessage = "Hello from Flutter Remote Dev! OTA Patch applied successfully!";
-  static const Color themeAccentColor = Colors.amber;
+  static const String dartCodeVersion = "1.0.1 (Native Baseline v2)";
+  static const String hotfixMessage = "Running Native Build v1.0.1 (Build Code 2)!";
+  static const Color themeAccentColor = Colors.indigo;
   // =============================================================
 
   @override

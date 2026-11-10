@@ -4,6 +4,24 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.0'
+}
+
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
 if (keystorePropertiesFile.exists()) {
@@ -28,8 +46,8 @@ android {
         applicationId "com.example.flutter_remote_dev"
         minSdk 21
         targetSdk 35
-        versionCode 1
-        versionName "1.0.0"
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
 
         ndk {
             abiFilters "arm64-v8a", "armeabi-v7a"
