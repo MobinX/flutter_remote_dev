@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
+import '../../models/product.dart';
 import '../../providers/business_provider.dart';
 import '../../providers/products_provider.dart';
 import '../../widgets/app_card.dart';
