@@ -55,7 +55,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   // Default URL of the Cloudflare Worker streaming GitHub's /lastpatch
   final TextEditingController _urlController = TextEditingController(
-    text: 'https://flutter-patcher.YOUR_ACCOUNT.workers.dev',
+    text: 'https://flutter-remote-dev-patch-worker.mobin-devx.workers.dev',
   );
 
   bool _isChecking = false;

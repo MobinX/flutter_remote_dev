@@ -2,9 +2,7 @@
 # Configuration for flutter_patcher OTA code-push hotfix system
 
 # The OTA server URL where manifest.json and patch.zip are hosted.
-# Replace with your deployed Cloudflare Worker URL, e.g.:
-# https://flutter-patcher.YOUR_ACCOUNT.workers.dev
-url: "https://flutter-patcher.YOUR_ACCOUNT.workers.dev"
+url: "https://flutter-remote-dev-patch-worker.mobin-devx.workers.dev"
 
 # Path to the digital signing keys
 keys:

@@ -201,8 +201,8 @@ npx wrangler secret put GITHUB_TOKEN
 
 ### 3. Flutter App Endpoint
 In `flutter_patcher.yaml` and `lib/main.dart`:
-- Set the base URL to your deployed worker domain:
-  `https://flutter-remote-dev-patch-worker.<your-subdomain>.workers.dev`
+- Production Worker Endpoint:
+  `https://flutter-remote-dev-patch-worker.mobin-devx.workers.dev`
 
 ---
 
