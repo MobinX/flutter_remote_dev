@@ -44,10 +44,10 @@ export default {
     }
 
     // GitHub repository configuration from environment variables
-    const owner = env.GITHUB_OWNER || 'YOUR_GITHUB_USERNAME_OR_ORG';
+    const owner = env.GITHUB_OWNER || 'MobinX';
     const repo = env.GITHUB_REPO || 'flutter_remote_dev';
     const branch = env.GITHUB_BRANCH || 'main';
-    const githubToken = env.GITHUB_TOKEN; // Optional: Required for private repos
+    const githubToken = env.GITHUB_TOKEN;
 
     // Diagnostic endpoint: /status or /health
     if (relativePath === 'status' || relativePath === 'health') {
@@ -84,75 +84,42 @@ export default {
     // Target file path inside GitHub repo
     const targetFilePath = `lastpatch/${relativePath}`;
 
-    // GitHub source URL: Raw CDN or API endpoint (for private repos)
-    const githubRawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${targetFilePath}`;
-
-    const fetchHeaders = new Headers({
-      'User-Agent': 'Cloudflare-Worker-Flutter-Patcher',
-    });
-
-    if (githubToken) {
-      fetchHeaders.set('Authorization', `Bearer ${githubToken}`);
-    }
-
     try {
-      // Fetch the requested asset from GitHub
-      const githubRes = await fetch(githubRawUrl, {
-        method: request.method,
-        headers: fetchHeaders,
-        cf: {
-          cacheTtl: relativePath === 'manifest.json' ? 0 : 300,
-          cacheEverything: relativePath !== 'manifest.json',
-        },
-      });
+      // -------------------------------------------------------------
+      // 1. Manifest Endpoint: Instant, real-time fetch via GitHub API
+      // -------------------------------------------------------------
+      if (relativePath === 'manifest.json' && request.method === 'GET') {
+        const apiHeaders = new Headers({
+          'User-Agent': 'Cloudflare-Worker-Flutter-Patcher',
+          'Accept': 'application/vnd.github.raw+json',
+        });
+        if (githubToken) {
+          apiHeaders.set('Authorization', `Bearer ${githubToken}`);
+        }
 
-      if (!githubRes.ok) {
-        if (githubRes.status === 404) {
+        const apiEndpoint = `https://api.github.com/repos/${owner}/${repo}/contents/${targetFilePath}?ref=${branch}`;
+        const manifestRes = await fetch(apiEndpoint, {
+          headers: apiHeaders,
+          cf: { cacheTtl: -1, cacheEverything: false },
+        });
+
+        if (!manifestRes.ok) {
           return new Response(
-            JSON.stringify(
-              {
-                error: 'Not Found',
-                message: `File '${targetFilePath}' does not exist in branch '${branch}'.`,
-                repo: `${owner}/${repo}`,
-                checked_url: githubRawUrl,
-              },
-              null,
-              2
-            ),
+            JSON.stringify({
+              error: 'Manifest Not Found',
+              message: `Could not retrieve manifest from ${owner}/${repo}@${branch}`,
+              status: manifestRes.status,
+            }),
             {
-              status: 404,
-              headers: {
-                'Content-Type': 'application/json',
-                ...getCorsHeaders(),
-              },
+              status: manifestRes.status,
+              headers: { 'Content-Type': 'application/json', ...getCorsHeaders() },
             }
           );
         }
-        return new Response(`GitHub upstream returned HTTP ${githubRes.status}`, {
-          status: githubRes.status,
-          headers: getCorsHeaders(),
-        });
-      }
 
-      // If manifest.json is requested, parse and inject absolute worker URL into `patch_url`
-      if (relativePath === 'manifest.json' && request.method === 'GET') {
-        const manifestText = await githubRes.text();
-        let manifestData;
-        try {
-          manifestData = JSON.parse(manifestText);
-        } catch {
-          // If not valid JSON, fallback to direct text
-          return new Response(manifestText, {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json; charset=utf-8',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              ...getCorsHeaders(),
-            },
-          });
-        }
+        const manifestData = await manifestRes.json();
 
-        // Dynamically resolve patch_url to this Worker instance so Flutter client downloads via worker
+        // Dynamically resolve patch_url to this Worker instance
         if (manifestData.patch_url && !manifestData.patch_url.startsWith('http://') && !manifestData.patch_url.startsWith('https://')) {
           const cleanPatchPath = manifestData.patch_url.replace(/^\/+/, '');
           manifestData.patch_url = `${url.origin}/${cleanPatchPath}`;
@@ -162,14 +129,47 @@ export default {
           status: 200,
           headers: {
             'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
             ...getCorsHeaders(),
           },
         });
       }
 
+      // -------------------------------------------------------------
       // 2. Binary / Static Assets (e.g. patch.zip, .so binaries, images):
       // Must stream chunk-by-chunk to stay under worker low-memory ceiling!
+      // -------------------------------------------------------------
+      const githubRawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${targetFilePath}`;
+      const fetchHeaders = new Headers({
+        'User-Agent': 'Cloudflare-Worker-Flutter-Patcher',
+      });
+      if (githubToken) {
+        fetchHeaders.set('Authorization', `Bearer ${githubToken}`);
+      }
+
+      const githubRes = await fetch(githubRawUrl, {
+        method: request.method,
+        headers: fetchHeaders,
+        cf: {
+          cacheTtl: 300,
+          cacheEverything: true,
+        },
+      });
+
+      if (!githubRes.ok) {
+        return new Response(
+          JSON.stringify({
+            error: 'Asset Not Found',
+            path: targetFilePath,
+            status: githubRes.status,
+          }),
+          {
+            status: githubRes.status,
+            headers: { 'Content-Type': 'application/json', ...getCorsHeaders() },
+          }
+        );
+      }
+
       const contentType = getMimeType(relativePath, githubRes.headers.get('content-type'));
       const contentLength = githubRes.headers.get('content-length');
       const etag = githubRes.headers.get('etag');
@@ -180,29 +180,20 @@ export default {
         ...getCorsHeaders(),
       });
 
-      if (contentLength) {
-        responseHeaders.set('Content-Length', contentLength);
-      }
-      if (etag) {
-        responseHeaders.set('ETag', etag);
-      }
+      if (contentLength) responseHeaders.set('Content-Length', contentLength);
+      if (etag) responseHeaders.set('ETag', etag);
 
       if (request.method === 'HEAD') {
-        return new Response(null, {
-          status: 200,
-          headers: responseHeaders,
-        });
+        return new Response(null, { status: 200, headers: responseHeaders });
       }
 
-      // Chunk read -> Chunk write TransformStream pipeline
+      // Chunk read -> Chunk write TransformStream pipeline (Zero buffer memory usage)
       const { readable, writable } = new TransformStream({
         transform(chunk, controller) {
-          // Stream chunks as they arrive directly to client without buffering
           controller.enqueue(chunk);
         },
       });
 
-      // Stream data from GitHub response into the client writable stream asynchronously
       ctx.waitUntil(
         githubRes.body.pipeTo(writable).catch((err) => {
           console.error('Streaming pipeline error:', err);
