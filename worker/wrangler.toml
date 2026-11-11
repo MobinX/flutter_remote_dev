@@ -1,7 +1,9 @@
-name = "flutter-remote-dev-patch-worker"
+name = "oryxa-flutter-patch-worker"
 main = "src/index.js"
-compatibility_date = "2024-03-01"
+compatibility_date = "2024-11-01"
 
 [vars]
 GITHUB_OWNER = "MobinX"
-GITHUB_REPO = "flutter_remote_dev"
+GITHUB_REPO = "Oryxa"
+GITHUB_BRANCH = "main"
+REPO_PATH = "flutter/lastpatch"

@@ -45,8 +45,9 @@ export default {
 
     // GitHub repository configuration from environment variables
     const owner = env.GITHUB_OWNER || 'MobinX';
-    const repo = env.GITHUB_REPO || 'flutter_remote_dev';
+    const repo = env.GITHUB_REPO || 'Oryxa';
     const branch = env.GITHUB_BRANCH || 'main';
+    const repoPath = (env.REPO_PATH || 'flutter/lastpatch').replace(/\/+$/, '');
     const githubToken = env.GITHUB_TOKEN;
 
     // Diagnostic endpoint: /status or /health
@@ -60,7 +61,7 @@ export default {
               owner,
               repo,
               branch,
-              path: 'lastpatch/',
+              path: `${repoPath}/`,
             },
             endpoints: {
               manifest: `${url.origin}/manifest.json`,
@@ -82,7 +83,7 @@ export default {
     }
 
     // Target file path inside GitHub repo
-    const targetFilePath = `lastpatch/${relativePath}`;
+    const targetFilePath = `${repoPath}/${relativePath}`;
 
     try {
       // -------------------------------------------------------------

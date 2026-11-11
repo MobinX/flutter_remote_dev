@@ -2,7 +2,7 @@
 # Generated automatically by scripts/setup_template.sh
 
 patch_server:
-  manifest_url: "https://flutter-remote-dev-patch-worker.mobin-devx.workers.dev/manifest.json"
+  manifest_url: "https://oryxa-flutter-patch-worker.mobin-devx.workers.dev/manifest.json"
   auto_check_update: true
   auto_download_patch: true
   verify_signature: true
