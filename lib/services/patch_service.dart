@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 
 class PatchService extends ChangeNotifier {
   static const String defaultWorkerUrl =
-      'https://flutter-remote-dev-patch-worker.mobin-devx.workers.dev';
+      'https://oryxa-flutter-patch-worker.mobin-devx.workers.dev';
 
   String _workerUrl = defaultWorkerUrl;
   bool _isChecking = false;
